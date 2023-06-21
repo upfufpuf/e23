@@ -1,0 +1,355 @@
+import sys
+import pygame
+import math
+import random
+
+# Constants
+SCREEN_WIDTH = int(800 * 0.8)  # 85% of the original width
+SCREEN_HEIGHT = int(600 * 1.25)  # 125% of the original height
+
+CELL_SIZE = 32
+PLAYER_SPEED = 5
+ROTATION_SPEED = 0.1
+DOOR_OPEN_TIME = 180
+HUD_FONT_SIZE = 36
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+BROWN = (139, 69, 19)
+YELLOW = (255, 255, 0)
+KEY_SIZE = 10
+DOOR_PROBABILITY = 0.1  # 5% chance of placing a door
+KEY_PROBABILITY = 0.5  # 5% chance of placing a key
+FOV = math.radians(60)
+
+class SpriteObject:
+    def __init__(self, pos, sprite):
+        self.x, self.y = pos
+        self.sprite = sprite
+
+    def object_in_FOV(self, player):
+        dx, dy = self.x - player.x, self.y - player.y
+        self.distance = math.sqrt(dx ** 2 + dy ** 2)
+
+        angle = player.angle - math.atan2(dy, dx)
+        angle -= math.pi
+
+        if angle > math.pi:
+            angle -= 2 * math.pi
+        elif angle < -math.pi:
+            angle += 2 * math.pi
+
+        self.angle = angle
+
+        if math.pi / 4 - self.angle < 0 or math.pi / 4 + self.angle > 0:
+            return False
+
+        return True
+
+class Maze:
+    def __init__(self):
+        self.data = None
+        self.width = 0
+        self.height = 0
+        self.doors = []
+        self.keys = []
+        self.start = (0, 0)
+        self.key_img = pygame.image.load('key.png')
+    def generate_maze(self, x_size, y_size):
+        self.width = x_size
+        self.height = y_size
+        self.data = [['#' for _ in range(x_size)] for _ in range(y_size)]
+
+        stack = [(1, 1)]
+        self.data[1][1] = ' '
+
+        while stack:
+            x, y = stack[-1]
+            directions = []
+
+            if y > 1 and self.data[y - 2][x] == '#':
+                directions.append((0, -1))
+            if y < y_size - 2 and self.data[y + 2][x] == '#':
+                directions.append((0, 1))
+            if x > 1 and self.data[y][x - 2] == '#':
+                directions.append((-1, 0))
+            if x < x_size - 2 and self.data[y][x + 2] == '#':
+                directions.append((1, 0))
+
+            if directions:
+                dx, dy = random.choice(directions)
+                self.data[y + dy][x + dx] = ' '
+                self.data[y + 2 * dy][x + 2 * dx] = ' '
+                stack.append((x + 2 * dx, y + 2 * dy))
+            else:
+                stack.pop()
+        
+        # Set the start location after maze generation
+        self.start = (1, 1)  # You can set this to any location you want
+        for x in range(1, x_size, 2):
+            for y in range(1, y_size, 2):
+                if random.random() < DOOR_PROBABILITY:
+                    self.data[y][x] = 'D'
+                elif random.random() < KEY_PROBABILITY:
+                    self.data[y][x] = 'K'
+    def draw_doors_and_keys(self, screen):
+        for y, row in enumerate(self.data):
+            for x, cell in enumerate(row):
+                if cell == 'D':  # Door
+                    pygame.draw.rect(screen, BROWN, (x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE))
+                elif cell == 'K':  # Key
+                    screen.blit(self.key_img, (x * CELL_SIZE, y * CELL_SIZE))  # Use the key image
+
+    def place_door(self, x, y):
+        self.data[y][x] = 'D'
+
+    def place_key(self, x, y):
+        self.data[y][x] = 'K'
+
+    def draw_maze(screen, player, maze):
+        for y, row in enumerate(maze.data):
+            for x, cell in enumerate(row):
+                if cell == '#':  # Wall
+                    wall = SpriteObject((x * CELL_SIZE, y * CELL_SIZE), wall_img)  # You need to provide the wall image here
+                    if wall.object_in_FOV(player):
+                        wall_height = CELL_SIZE * SCREEN_HEIGHT / (wall.distance * math.cos(wall.angle))
+                        pygame.draw.rect(screen, BLACK, (wall_screen_x, SCREEN_HEIGHT // 2 - wall_height // 2, 1, wall_height))
+
+    def find_start(self):
+        for y in range(self.height):
+            for x in range(self.width):
+                if self.data[y][x] == ' ':
+                    self.start = (x, y)
+                    return
+
+
+    def open_door(self, x, y):
+        self.data[y][x] = ' '
+def create_scaled_key_imgs(maze, sizes):
+    scaled_key_imgs = {}
+    for size in sizes:
+        scaled_key_imgs[size] = pygame.transform.scale(maze.key_img, (int(size * SCREEN_HEIGHT), int(size * SCREEN_HEIGHT)))
+    return scaled_key_imgs
+
+# In the main function, before the game loop:
+sizes = [i / 100 for i in range(1, 101)]  # Sizes from 0.01 to 1.00
+
+
+# In the game loop, when calling
+{
+    "mermaid": "graph TB\n  P[\"Player\"] -- \"Angle and Position\" --> DR[\"Draw_3D\"]\n  DR -- \"Draw Wall\" --> DW[\"Draw Wall\"]\n  DR -- \"Draw Key\" --> DK[\"Draw Key\"]\n  DK -- \"Check Wall\" --> CW[\"Check Wall\"]\n  CW -- \"Wall Exists\" --> DK\n  CW -- \"No Wall\" --> DI[\"Draw Image\"]\n  DI -- \"Scale Image\" --> SI[\"Scale Image\"]\n  SI -- \"Draw Scaled Image\" --> DSI[\"Draw Scaled Image\"]"
+}
+class Player:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.angle = 0
+        self.has_key = False
+        self.door_open_countdown = 0
+
+
+def draw_3d(screen, player, maze):
+    width, height = screen.get_size()
+    FOV = math.pi / 4
+    num_rays = width
+    angle_step = FOV / num_rays
+
+    for i in range(num_rays):
+        angle = -FOV / 2 + i * angle_step
+        distance, color, key_distance = cast_ray(player, angle, maze)
+        wall_height = CELL_SIZE * height / (distance * math.cos(angle))
+
+        # Draw the background color for each ray
+        pygame.draw.rect(screen, WHITE, (i, 0, 1, height))
+
+        # Draw keys
+        if key_distance:
+            draw_key_3d(screen, player, maze)
+
+        if color:
+            pygame.draw.rect(screen, color, (i, height // 2 - wall_height // 2, 1, wall_height))
+
+def draw_key_3d(screen, player, maze, scaled_key_imgs):
+    player_angle = player.angle
+    player_x, player_y = player.x, player.y
+
+    for y, row in enumerate(maze.data):
+        for x, cell in enumerate(row):
+            if cell == 'K':  # Key
+                key_x, key_y = x * CELL_SIZE, y * CELL_SIZE
+                
+                # Calculate the angle difference between the player and the key
+                angle_diff = math.atan2(key_y - player_y, key_x - player_x) - player_angle
+                angle_diff %= 2 * math.pi
+                if angle_diff > math.pi:
+                    angle_diff -= 2 * math.pi
+
+                # Calculate the distance between the player and the key
+                dist = math.sqrt((player_x - key_x) ** 2 + (player_y - key_y) ** 2)
+                dist = max(dist, 1)  # Add a minimum limit to dist
+
+                # Check if there is a wall between the player and the key
+                for i in range(int(dist)):
+                    check_x = player_x + i * math.cos(player_angle + angle_diff)
+                    check_y = player_y + i * math.sin(player_angle + angle_diff)
+                    if maze.data[int(check_y // CELL_SIZE)][int(check_x // CELL_SIZE)] == '#':
+                        break
+                else:
+                    # Get the projected size of the key
+                    key_size = KEY_SIZE / dist
+
+                    # Limit the maximum size of the key image
+                    max_key_size = min(SCREEN_HEIGHT, SCREEN_WIDTH) // 2
+                    key_size = min(key_size, max_key_size)
+
+                    # Calculate the position of the key on the screen
+                    key_screen_x = (0.5 - angle_diff / FOV) * SCREEN_WIDTH
+                    key_screen_y = (1 - key_size) * SCREEN_HEIGHT / 2
+
+                    # Find the pre-scaled image that is closest to the size we need
+                    closest_size = min(scaled_key_imgs.keys(), key=lambda k: abs(k - key_size))
+                    key_img = scaled_key_imgs[closest_size]
+
+                    # Draw the key
+                    screen.blit(key_img, (int(key_screen_x), int(key_screen_y)))
+
+def cast_ray(player, angle, maze):
+    ray_x, ray_y = player.x, player.y
+    ray_angle = player.angle + angle
+    max_distance = max(maze.width, maze.height) * CELL_SIZE
+    sin_angle, cos_angle = math.sin(ray_angle), math.cos(ray_angle)
+
+    key_distance = None
+
+    for distance in range(1, max_distance):
+        ray_x += cos_angle
+        ray_y += sin_angle
+
+        grid_x, grid_y = int(ray_x // CELL_SIZE), int(ray_y // CELL_SIZE)
+        if 0 <= grid_x < maze.width and 0 <= grid_y < maze.height:
+            cell = maze.data[grid_y][grid_x]
+            if cell == '#':  # Wall
+                return distance, BLACK, key_distance
+            elif cell == 'D':  # Door
+                if player.has_key:  # If the player has collected the key
+                    maze.data[grid_y][grid_x] = ' '
+                    player.has_key = False
+                else:
+                    return distance, BROWN, key_distance
+            elif cell == 'K':  # Key
+                key_distance = distance
+
+        else:
+            break
+
+    return distance, None, key_distance
+
+
+def handle_doors(player, maze):
+    if player.door_open_countdown > 0:
+        player.door_open_countdown -= 1
+        if player.door_open_countdown == 0:
+            player.has_key = False
+
+    grid_x, grid_y = int(player.x // CELL_SIZE), int(player.y // CELL_SIZE)
+    for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+        x, y = grid_x + dx, grid_y + dy
+        if 0 <= x < maze.width and 0 <= y < maze.height:
+            if maze.data[y][x] == 'D' and player.has_key:
+                player.door_open_countdown = DOOR_OPEN_TIME
+                maze.open_door(x, y)
+
+def draw_hud(screen, player):
+    font = pygame.font.Font(None, HUD_FONT_SIZE)
+    key_text = "Key: " + ("Collected" if player.has_key else "Not Collected")
+    key_status = font.render(key_text, True, BLACK)
+    screen.blit(key_status, (10, 10))
+
+
+def handle_input(player, maze):
+    keys = pygame.key.get_pressed()
+    sin_angle, cos_angle = math.sin(player.angle), math.cos(player.angle)
+
+    # Moving forward
+    if keys[pygame.K_w]:
+        new_x = player.x + cos_angle * PLAYER_SPEED
+        new_y = player.y + sin_angle * PLAYER_SPEED
+        if not is_wall(new_x, new_y, maze):
+            player.x, player.y = new_x, new_y
+
+    # Moving backward
+    if keys[pygame.K_s]:
+        new_x = player.x - cos_angle * PLAYER_SPEED
+        new_y = player.y - sin_angle * PLAYER_SPEED
+        if not is_wall(new_x, new_y, maze):
+            player.x, player.y = new_x, new_y
+
+    # Turning left
+    if keys[pygame.K_a]:
+        player.angle -= ROTATION_SPEED
+
+    # Turning right
+    if keys[pygame.K_d]:
+        player.angle += ROTATION_SPEED
+
+    # Collect key
+    grid_x, grid_y = int(player.x // CELL_SIZE), int(player.y // CELL_SIZE)
+    if maze.data[grid_y][grid_x] == 'K':
+        player.has_key = True
+        maze.data[grid_y][grid_x] = ' '
+
+
+def is_wall(x, y, maze):
+    grid_x, grid_y = int(x // CELL_SIZE), int(y // CELL_SIZE)
+    return maze.data[grid_y][grid_x] == '#'
+
+ 
+def main():
+    pygame.init()
+
+    screen = pygame.display.set_mode((SCREEN_WIDTH * 2, SCREEN_HEIGHT))
+    pygame.display.set_caption("Maze Runner")
+
+    width, height = 25, 25
+    maze = Maze()  # Create Maze instance
+    maze.generate_maze(width, height)  # Generate maze data
+
+    player = Player(maze.start[0] * CELL_SIZE, maze.start[1] * CELL_SIZE)
+
+    # Define num_rays
+    num_rays = 300  # Or any other value that suits your game
+
+    # Create scaled key images
+    sizes = [int(SCREEN_HEIGHT * KEY_SIZE / (distance * math.cos(angle))) for distance in range(1, max(maze.width, maze.height) * CELL_SIZE) for angle in [-FOV / 2 + i * angle_step for i in range(num_rays)]]
+    scaled_key_imgs = create_scaled_key_imgs(maze, sizes)
+
+    # ... rest of your code ...
+
+
+    running = True
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+
+        screen.fill(WHITE)
+
+        # Draw the 3D view using ray casting
+        draw_3d(screen.subsurface((SCREEN_WIDTH, 0, SCREEN_WIDTH, SCREEN_HEIGHT)), player, maze)
+        draw_key_3d(screen, player, maze)
+        
+        # Draw doors and keys
+        maze.draw_doors_and_keys(screen.subsurface((0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)))
+        
+        handle_input(player, maze)
+        handle_doors(player, maze)
+        draw_hud(screen, player)
+        draw_3d(screen, player, maze)
+        
+        pygame.display.flip()
+
+    pygame.quit()
+   
+    sys.exit()
+
+if __name__ == '__main__':
+    main()
